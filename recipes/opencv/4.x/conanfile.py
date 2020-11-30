@@ -125,6 +125,10 @@ class OpenCVConan(ConanFile):
         if self._cmake:
             return self._cmake
         self._cmake = CMake(self)
+        if self.settings.os == "Android" and not self.options.shared:
+            self._cmake.definitions["BUILD_ANDROID_EXAMPLES"] = False
+            self._cmake.definitions["BUILD_ANDROID_PROJECTS"] = False
+            self._cmake.definitions["WITH_CAROTENE"] = False # arm64 failed to build with linker errors
         self._cmake.definitions["OPENCV_CONFIG_INSTALL_PATH"] = "cmake"
         self._cmake.definitions["OPENCV_BIN_INSTALL_PATH"] = "bin"
         self._cmake.definitions["OPENCV_LIB_INSTALL_PATH"] = "lib"
@@ -280,6 +284,8 @@ class OpenCVConan(ConanFile):
                 self.cpp_info.components[conan_component].names["cmake_find_package_multi"] = cmake_target
                 self.cpp_info.components[conan_component].libs = [lib_name]
                 self.cpp_info.components[conan_component].includedirs.append(os.path.join("include", "opencv4"))
+                if self.settings.os == "Android" and not self.options.shared:
+                    self.cpp_info.components[conan_component].includedirs.append(os.path.join("sdk", "native", "jni", "include"))
                 self.cpp_info.components[conan_component].requires = requires
                 if self.settings.os == "Linux":
                     self.cpp_info.components[conan_component].system_libs = ["dl", "m", "pthread", "rt"]
@@ -291,7 +297,9 @@ class OpenCVConan(ConanFile):
                 self.cpp_info.components[conan_component_alias].names["cmake_find_package_multi"] = cmake_component
                 self.cpp_info.components[conan_component_alias].requires = [conan_component]
                 self.cpp_info.components[conan_component_alias].includedirs.append(os.path.join("include", "opencv4"))
-                self.cpp_info.components[conan_component_alias].libdirs = []
+                if self.settings.os == "Android" and not self.options.shared:
+                    self.cpp_info.components[conan_component_alias].includedirs.append(os.path.join("sdk", "native", "jni", "include"))
+                    self.cpp_info.components[conan_component_alias].libdirs = [os.path.join("sdk", "native", "staticlibs")]
                 self.cpp_info.components[conan_component_alias].resdirs = []
                 self.cpp_info.components[conan_component_alias].bindirs = []
                 self.cpp_info.components[conan_component_alias].frameworkdirs = []
@@ -329,11 +337,16 @@ class OpenCVConan(ConanFile):
         def xfeatures2d():
             return ["opencv_xfeatures2d"] if self.options.contrib else []
 
+        def android_static():
+            return ["cpufeatures"] if self.settings.os == "Android" and not self.options.shared else []
+
         self.cpp_info.filenames["cmake_find_package"] = "OpenCV"
         self.cpp_info.filenames["cmake_find_package_multi"] = "OpenCV"
 
+        if self.settings.os == "Android" and not self.options.shared:
+            self.cpp_info.components["cpufeatures"].libs = ["cpufeatures"]
         add_components([
-            {"target": "opencv_core",       "lib": "core",       "requires": ["zlib::zlib"] + parallel() + eigen()},
+            {"target": "opencv_core",       "lib": "core",       "requires": ["zlib::zlib"] + parallel() + eigen() + android_static()},
             {"target": "opencv_flann",      "lib": "flann",      "requires": ["opencv_core"] + eigen()},
             {"target": "opencv_imgproc",    "lib": "imgproc",    "requires": ["opencv_core"] + eigen()},
             {"target": "opencv_ml",         "lib": "ml",         "requires": ["opencv_core"] + eigen()},
